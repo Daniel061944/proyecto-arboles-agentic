@@ -23,13 +23,14 @@ class SimpleCNN(nn.Module):
 
         # --- Bloque convolucional 1 ---
         self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),  # RGB → 32 filtros
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),  # recibe una imagen con 3 canales: rojo, verde y azul
+            # crea 32 filtros que buscan patrones simples: bordes, contrastes, texturas
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),                          # 128x128
+            nn.MaxPool2d(2, 2),  #reduce el tamaño de la imagen a la mitad                        # 128x128
         )
 
-        # --- Bloque convolucional 2 ---
+        # --- Bloque convolucional 2 : Hace lo mismo, pero ahora trabaja sobre lo que ya encontró el bloque anterior. para mirar paterones mas complejo
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
@@ -37,7 +38,7 @@ class SimpleCNN(nn.Module):
             nn.MaxPool2d(2, 2),                          # 64x64
         )
 
-        # --- Bloque convolucional 3 ---
+        # Bloque convolucional 3 : Hace lo mismo, pero ahora trabaja sobre lo que ya encontró el bloque anterior.
         self.conv3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
@@ -45,7 +46,7 @@ class SimpleCNN(nn.Module):
             nn.MaxPool2d(2, 2),                          # 32x32
         )
 
-        # --- Clasificador fully connected ---
+        # Clasificador fully connected 
         self.classifier = nn.Sequential(
             nn.Flatten(),
             nn.Linear(128 * 32 * 32, 512),
