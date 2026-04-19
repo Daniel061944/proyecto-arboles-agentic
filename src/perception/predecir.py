@@ -1,26 +1,16 @@
-"""
-predecir.py — Agente de Interacción (consola)
-Carga el modelo entrenado, clasifica una imagen y muestra
-la información botánica desde info.json.
-
-Proyecto: Arboretum y Palmetum UNAL Medellín
-
-Uso:
-    python predecir.py                          # pide la ruta por consola
-    python predecir.py --imagen ruta/foto.jpg   # ruta directa
-    python predecir.py --imagen foto.jpg --top 3  # muestra top-3 especies
-"""
-
 import argparse
 import json
 import os
 import sys
+import importlib
 
 import torch
 from PIL import Image
 from torchvision import transforms
 
-from modelo import SimpleCNN
+import modelo
+importlib.reload(modelo)
+from modelo import crear_modelo # Importar la función crear_modelo que devuelve TreeResNet18
 
 # ─────────────────────────────────────────────
 # Rutas por defecto
@@ -43,7 +33,8 @@ def cargar_modelo(modelo_path: str, device: torch.device):
     img_size   = checkpoint.get("img_size", IMG_SIZE)
     num_clases = checkpoint["num_clases"]
 
-    modelo = SimpleCNN(num_clases).to(device)
+    # Usar crear_modelo para instanciar el modelo correcto (TreeResNet18)
+    modelo = crear_modelo(num_clases).to(device)
     modelo.load_state_dict(checkpoint["model_state_dict"])
     modelo.eval()
 
@@ -161,5 +152,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Clasifica una imagen de árbol del Arboretum UNAL")
     parser.add_argument("--imagen", type=str, default=None,  help="Ruta a la imagen (.jpg, .png …)")
     parser.add_argument("--top",    type=int, default=1,     help="Mostrar top-N predicciones (default: 1)")
-    args = parser.parse_args()
+    args = parser.parse_args([]) # Modified: Pass an empty list to parse_args to ignore kernel arguments
     main(args)
