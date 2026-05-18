@@ -1,6 +1,4 @@
-pytest
-faker
-tqdm
-numpy
-pandas
-scikit-learn
+streamlit
+torch
+torchvision
+Pillow
