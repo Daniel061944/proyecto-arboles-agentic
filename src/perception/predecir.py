@@ -10,40 +10,35 @@ from torchvision import transforms
 
 import modelo
 importlib.reload(modelo)
-from modelo import crear_modelo # Importar la función crear_modelo que devuelve TreeResNet18
+from modelo import crear_modelo
 
-# ─────────────────────────────────────────────
-# Rutas por defecto
-# ─────────────────────────────────────────────
+
 MODELO_PATH = "modelo_arboles.pth"
-INFO_PATH   = "info.json"
-IMG_SIZE    = 256
+INFO_PATH = "info.json"
+IMG_SIZE = 224
 
 
-def cargar_modelo(modelo_path: str, device: torch.device):
-    """Carga el modelo guardado y devuelve (modelo, clases)."""
+def cargar_modelo(modelo_path, device):
     if not os.path.isfile(modelo_path):
         raise FileNotFoundError(
-            f"No se encontró '{modelo_path}'. "
-            "Ejecuta primero: python entrenar.py"
+            f"No se encontró '{modelo_path}'. Ejecuta primero entrenar.py."
         )
 
     checkpoint = torch.load(modelo_path, map_location=device)
-    clases     = checkpoint["clases"]
-    img_size   = checkpoint.get("img_size", IMG_SIZE)
+
+    clases = checkpoint["clases"]
+    img_size = checkpoint.get("img_size", IMG_SIZE)
     num_clases = checkpoint["num_clases"]
 
-    # Usar crear_modelo para instanciar el modelo correcto (TreeResNet18)
-    modelo = crear_modelo(num_clases).to(device)
+    modelo = crear_modelo(num_clases, device)
     modelo.load_state_dict(checkpoint["model_state_dict"])
     modelo.eval()
 
     return modelo, clases, img_size
 
 
-def preprocesar_imagen(ruta: str, img_size: int) -> torch.Tensor:
-    """Carga y transforma una imagen para pasarla al modelo."""
-    media   = [0.485, 0.456, 0.406]
+def preprocesar_imagen(ruta, img_size):
+    media = [0.485, 0.456, 0.406]
     std_dev = [0.229, 0.224, 0.225]
 
     tf = transforms.Compose([
@@ -53,73 +48,53 @@ def preprocesar_imagen(ruta: str, img_size: int) -> torch.Tensor:
     ])
 
     imagen = Image.open(ruta).convert("RGB")
-    return tf(imagen).unsqueeze(0)  # añadir dimensión de batch
+    return tf(imagen).unsqueeze(0)
 
 
-def cargar_info(info_path: str) -> dict:
-    """Carga el archivo info.json con los datos botánicos de cada especie."""
+def cargar_info(info_path):
     if not os.path.isfile(info_path):
-        print(f"⚠️  No se encontró '{info_path}'. Se mostrará solo la clasificación.")
         return {}
+
     with open(info_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-def mostrar_resultado(especie: str, confianza: float, info: dict, top_k: list):
-    """Imprime el resultado en consola de forma clara."""
-    separador = "─" * 50
+def mostrar_resultado(especie, confianza, info, top_k_list):
+    print("\n" + "─" * 60)
+    print(f"🌳 ESPECIE IDENTIFICADA: {especie.upper()}")
+    print(f"📈 Confianza: {confianza * 100:.2f}%")
+    print("─" * 60)
 
-    print(f"\n{separador}")
-    print(f"🌳  ESPECIE IDENTIFICADA: {especie.upper()}")
-    print(f"    Confianza: {confianza * 100:.1f}%")
-    print(separador)
-
-    # Información botánica desde info.json
     datos = info.get(especie, info.get(especie.lower(), {}))
+
     if datos:
-        print("📋  INFORMACIÓN BOTÁNICA:")
-        campos = {
-            "nombre_cientifico": "Nombre científico",
-            "nombre_vulgar":     "Nombre vulgar",
-            "familia":           "Familia",
-            "utilidad":          "Utilidad",
-            "estado":            "Estado de conservación",
-            "propagacion":       "Propagación",
-            "descripcion":       "Descripción",
-        }
-        for clave, etiqueta in campos.items():
-            valor = datos.get(clave)
-            if valor:
-                print(f"   • {etiqueta}: {valor}")
+        print("\n📋 INFORMACIÓN BOTÁNICA:")
+        for clave, valor in datos.items():
+            print(f"   • {clave}: {valor}")
     else:
-        print("ℹ️   No se encontró información botánica para esta especie en info.json.")
+        print("\nℹ️ No se encontró información botánica en info.json.")
 
-    # Top-k alternativas
-    if len(top_k) > 1:
-        print(f"\n📊  TOP {len(top_k)} PREDICCIONES:")
-        for i, (nombre, prob) in enumerate(top_k, 1):
-            marcador = "👉" if i == 1 else "  "
-            print(f"   {marcador} {i}. {nombre:20s}  {prob * 100:.1f}%")
+    print(f"\n📊 TOP {len(top_k_list)} PREDICCIONES:")
+    for i, (nombre, prob) in enumerate(top_k_list, 1):
+        marca = "👉" if i == 1 else "  "
+        print(f"{marca} {i}. {nombre:25s} {prob * 100:.2f}%")
 
-    print(separador + "\n")
+    print("─" * 60 + "\n")
 
 
-def predecir(ruta_imagen: str, modelo, clases: list, img_size: int,
-             info: dict, device: torch.device, top_k: int = 1):
-    """Realiza la predicción y muestra el resultado."""
+def predecir(ruta_imagen, modelo, clases, img_size, info, device, top_k=3):
     if not os.path.isfile(ruta_imagen):
-        print(f"❌ No se encontró el archivo: {ruta_imagen}")
+        print(f"❌ No se encontró la imagen: {ruta_imagen}")
         return
 
     tensor = preprocesar_imagen(ruta_imagen, img_size).to(device)
 
     with torch.no_grad():
         logits = modelo(tensor)
-        probs  = torch.softmax(logits, dim=1)[0]
+        probs = torch.softmax(logits, dim=1)[0]
 
-    # Ordenar por probabilidad descendente
     top_indices = probs.argsort(descending=True)[:top_k]
-    top_k_list  = [(clases[i], probs[i].item()) for i in top_indices]
+    top_k_list = [(clases[i], probs[i].item()) for i in top_indices]
 
     especie_pred, confianza = top_k_list[0]
     mostrar_resultado(especie_pred, confianza, info, top_k_list)
@@ -129,28 +104,38 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     print("\n🌿 Sistema de Clasificación de Árboles — Arboretum UNAL Medellín")
-    print("   Cargando modelo …")
+    print(f"🖥️ Dispositivo: {device}")
+    print("Cargando modelo...")
 
     modelo, clases, img_size = cargar_modelo(MODELO_PATH, device)
     info = cargar_info(INFO_PATH)
 
-    print(f"✅ Modelo cargado. Especies disponibles: {clases}\n")
+    print(f"✅ Modelo cargado con {len(clases)} especies:")
+    print(clases)
 
-    # Obtener ruta de la imagen
     if args.imagen:
         ruta_imagen = args.imagen
     else:
-        ruta_imagen = input("📷 Ingresa la ruta de la imagen a clasificar: ").strip()
+        ruta_imagen = input("\n📷 Ingresa la ruta de la imagen: ").strip()
         if not ruta_imagen:
-            print("❌ No se ingresó ninguna ruta. Saliendo.")
+            print("❌ No ingresaste ninguna imagen.")
             sys.exit(1)
 
-    predecir(ruta_imagen, modelo, clases, img_size, info, device, top_k=args.top)
+    predecir(
+        ruta_imagen,
+        modelo,
+        clases,
+        img_size,
+        info,
+        device,
+        top_k=args.top
+    )
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Clasifica una imagen de árbol del Arboretum UNAL")
-    parser.add_argument("--imagen", type=str, default=None,  help="Ruta a la imagen (.jpg, .png …)")
-    parser.add_argument("--top",    type=int, default=1,     help="Mostrar top-N predicciones (default: 1)")
-    args = parser.parse_args([]) # Modified: Pass an empty list to parse_args to ignore kernel arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--imagen", type=str, default=None)
+    parser.add_argument("--top", type=int, default=3)
+
+    args = parser.parse_args([])  # útil en Colab/Jupyter
     main(args)
